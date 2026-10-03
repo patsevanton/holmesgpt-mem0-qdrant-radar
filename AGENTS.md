@@ -21,7 +21,7 @@
 
 ## Секреты (terraform.tfvars, в git не попадает)
 
-Кластер создаётся Terraform. Base URL, ключ, bot token и GitHub token берутся из
+Кластер создаётся Terraform. Base URL, ключ и bot token берутся из
 `terraform.tfvars` и в репозиторий не копируются:
 
 ```hcl
@@ -29,7 +29,6 @@ folder_id              = "b1gxxxxxxxxxxxxxxxx"
 llm_base_url           = "https://polza.ai/api/v1"
 llm_api_key            = "..."   # ключ polza.ai, общий для слабой модели и судьи
 mattermost_bot_token   = "..."
-github_token           = "..."   # PAT, доступ только к этому репозиторию
 ```
 
 ## Инфраструктура
