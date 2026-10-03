@@ -23,6 +23,16 @@
 - Какая связка MCP включена во время теста вики.
 - Что именно из Helm-чарта загружается и по какому признаку индексация считается законченной.
 
+## Переименование bench → holmsgpt
+
+Переименовать стенд с `bench` на `holmsgpt`:
+- K8s-кластер `yandex_kubernetes_cluster.bench` (`name = "bench"`) в `k8s.tf`.
+- Node-group `bench-node-group`.
+- Service account `bench-sa-k8s-editor`.
+- VPC-сеть `bench-vpc`, подсети `bench-a/b/d` (`net.tf`).
+- Helm-чарт `bench-apps`, helper-шаблоны `bench-apps.labels` и `bench-apps.image` (`chart/`).
+- Terraform-имена ресурсов, output и ссылки на них.
+
 ## mem0 и скиллы
 
 Отложено. Исследовать после того, как из шести связок выявлен финалист. В текущую серию не входит.
