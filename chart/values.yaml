@@ -1,0 +1,197 @@
+imageRegistry: ghcr.io/patsevanton/holmesgpt-mem0-qdrant-radar
+imageTag: "0.1.0"
+imagePullPolicy: IfNotPresent
+
+apps:
+  - name: go-1
+    replicaCount: 1
+    port: 8080
+    env:
+      LISTEN_ADDR: "8080"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  - name: go-2
+    replicaCount: 1
+    port: 9090
+    env:
+      START_DELAY: "90s"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  - name: go-3
+    replicaCount: 1
+    port: 8080
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  - name: go-4
+    replicaCount: 1
+    port: 8080
+    env:
+      REQUIRE_TOKEN: "true"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        cpu: 100m
+        memory: 64Mi
+  - name: nuxt-1
+    replicaCount: 1
+    port: 3000
+    env:
+      BIND_HOST: "localhost"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  - name: nuxt-2
+    replicaCount: 1
+    port: 3001
+    env:
+      READY_HOLD_MS: "600000"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  - name: nuxt-3
+    replicaCount: 0
+    port: 3000
+    env:
+      SITE_OPEN: "no"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  - name: nuxt-4
+    replicaCount: 1
+    port: 3000
+    env:
+      HEAP_CAP_MB: "8"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 32Mi
+  - name: java-1
+    replicaCount: 1
+    port: 8080
+    env:
+      LISTEN_PORT: "8080"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  - name: java-2
+    replicaCount: 1
+    port: 8080
+    env:
+      CONFIG_PATH: "/etc/app/missing.conf"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  - name: java-3
+    replicaCount: 1
+    port: 8080
+    env:
+      WORKER_THREADS: "1"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: 20m
+        memory: 512Mi
+  - name: java-4
+    replicaCount: 1
+    port: 8080
+    env:
+      CHUNK_KB: "4096"
+      JAVA_TOOL_OPTIONS: "-Xmx64m"
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 96Mi
+  - name: python-1
+    replicaCount: 1
+    port: 80
+    env:
+      PORT: "8080"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  - name: python-2
+    replicaCount: 1
+    port: 8080
+    env:
+      ALLOWED_USER: "ops"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  - name: python-3
+    replicaCount: 1
+    port: 8080
+    env:
+      CPU_THREADS: "4"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 50m
+        memory: 128Mi
+  - name: python-4
+    replicaCount: 1
+    port: 8080
+    env:
+      MAINTENANCE: "1"
+      IGNORE_TERM: "1"
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
