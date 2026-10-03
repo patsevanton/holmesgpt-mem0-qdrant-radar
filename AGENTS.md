@@ -26,8 +26,8 @@
 
 ```hcl
 folder_id              = "b1gxxxxxxxxxxxxxxxx"
-llm_base_url           = "https://polza.ai/api/v1"
-llm_api_key            = "..."   # ключ polza.ai, общий для слабой модели и судьи
+llm_base_url           = "..."   # OpenAI-совместимый base URL слабой модели и судьи
+llm_api_key            = "..."   # ключ LLM, общий для слабой модели и судьи
 mattermost_bot_token   = "..."
 ```
 

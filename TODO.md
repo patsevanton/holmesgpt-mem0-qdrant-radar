@@ -44,3 +44,21 @@
 - HolmesGPT умеет markdown-скиллы (`fetch_skill`) начиная с 0.26.0.
 - Своего toolset HolmesGPT для mem0 нет. Подключение возможно только как внешний MCP.
 - Кто пишет в mem0, что именно пишется и когда слабая модель это читает — не решено. До выбора финалиста не проектировать.
+
+## Бот Mattermost для демо
+
+Отложено. Поискать и подумать.
+
+Зафиксировано:
+
+- Готового бота под схему «сообщение в канале `#holmes-demo` → HTTP API HolmesGPT → ответ в тред» нет.
+- Официальной интеграции HolmesGPT↔Mattermost нет (HolmesGPT issue #2104 «Feature Request: Add Mattermost Integration» открыт).
+- Mattermost Agents plugin (`mattermost-plugin-agents`) подключает LLM-провайдера напрямую, а не вызывает HTTP API HolmesGPT — не подходит под схему спеки.
+- Заготовки `mattermost_bot` (Python) и Sample Go bot (Mattermost Go driver) — не мост к HolmesGPT.
+- matterbridge, BridgeMost — мосты между чатами, не то.
+
+Не решено:
+
+- Искать дальше готовое решение или писать своего лёгкого бота (Deployment + образ) под HTTP API HolmesGPT.
+- Как бот определяет, что сообщение адресовано ему, и куда пишет ответ (тред).
+- Bot token: секрет `mattermost-bot-token` уже генерируется Terraform.

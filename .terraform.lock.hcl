@@ -17,6 +17,14 @@ provider "registry.terraform.io/hashicorp/kubernetes" {
   ]
 }
 
+provider "registry.terraform.io/hashicorp/local" {
+  version     = "2.9.0"
+  constraints = "2.9.0"
+  hashes = [
+    "h1:9rBZCMNpxKwMlRbWH2QpwD3kqUCAejdOZQ/aiiDObXQ=",
+  ]
+}
+
 provider "registry.terraform.io/hashicorp/time" {
   version     = "0.14.2"
   constraints = "0.14.2"
