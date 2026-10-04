@@ -11,7 +11,7 @@
 
 ## Секреты (terraform.tfvars, в git не попадает)
 
-Кластер создаётся Terraform. Base URL, ключ и bot token берутся из
+Кластер создаётся Terraform. Base URL, ключ, bot token и GitHub-токен берутся из
 `terraform.tfvars` и в репозиторий не копируются:
 
 ```hcl
@@ -19,14 +19,33 @@ folder_id              = "b1gxxxxxxxxxxxxxxxx"
 llm_base_url           = "..."   # OpenAI-совместимый base URL слабой модели и судьи
 llm_api_key            = "..."   # ключ LLM, общий для слабой модели и судьи
 mattermost_bot_token   = "..."
+github_token           = "..."   # read-only GitHub PAT для GitHub MCP (связки 3, 4, 6)
 ```
 
-Секреты `holmes-llm-credentials` и `mattermost-bot-token` генерируются Terraform из
-`llm_api_key`, `llm_base_url` и `mattermost_bot_token` в файлы
-`k8s/holmes-llm-credentials.yaml` и `k8s/mattermost-bot-token.yaml` (в `.gitignore`, в
-git не попадают) и применяются в кластер через `kubectl apply -f`.
+Секреты `holmes-llm-credentials`, `mattermost-bot-token` и `github-mcp-token`
+генерируются Terraform из `llm_api_key`, `llm_base_url`, `mattermost_bot_token` и
+`github_token` в файлы `k8s/holmes-llm-credentials.yaml`,
+`k8s/mattermost-bot-token.yaml` и `k8s/github-mcp-token.yaml` (в `.gitignore`, в git
+не попадают) и применяются в кластер через `kubectl apply -f`.
 `holmes-llm-credentials` применяется перед установкой HolmesGPT (шаг 4),
 `mattermost-bot-token` — перед установкой Mattermost (шаг 5).
+`github-mcp-token` создаётся только если `github_token` непустой; он нужен для
+GitHub MCP (связки 3, 4, 6) и применяется перед HolmesGPT.
+
+### Read-only токен GitHub
+
+Для GitHub MCP нужен **read-only** токен. Два варианта:
+
+- **Classic PAT** (`ghp_…`): scope `repo` (доступ к репозиторию, issues, PR;
+  `public_repo` входит неявно). Для организаций — добавить `read:org`.
+- **Fine-grained PAT** (`github_pat_…`): Repository access — только этот репозиторий,
+  права **Metadata: Read** (обязательно), **Contents: Read**, **Issues: Read**,
+  **Pull requests: Read**, **Actions: Read**.
+
+Токен попадает в `terraform.tfvars` (`github_token`), Terraform рендерит его в
+`k8s/github-mcp-token.yaml`, а `helm upgrade` Holmes получает
+`mcpAddons.github.auth.secretName=github-mcp-token`. Секрет можно создать и вручную:
+`kubectl create secret generic github-mcp-token -n holmes --from-literal=token=<PAT>`.
 
 Пароль PostgreSQL для Mattermost в репозитории не хранится: `k8s/mattermost-apply.sh`
 читает его из кластерного секрета CloudNativePG (`mm-pg-app`) в момент запуска.
@@ -76,11 +95,30 @@ helm upgrade --install vlogs-collector oci://ghcr.io/victoriametrics/helm-charts
   --set 'remoteWrite[0].url=http://vlogs-victoria-logs-single-server.vmks.svc:9428'
 ```
 
+VictoriaLogs MCP (`victoria-logs-mcp 0.2.0`, app `v1.9.0`) — отдельный источник
+логов для связок 5 и 6:
+
+```bash
+helm repo add vm https://victoriametrics.github.io/helm-charts/
+helm repo update
+
+helm upgrade --install vlogs-mcp vm/victoria-logs-mcp \
+  --namespace vmks --version 0.2.0 --wait \
+  --set 'vl.entrypoint=http://vlogs-victoria-logs-single-server.vmks.svc:9428'
+```
+
+MCP-сервер поднимается на `vlogs-mcp-victoria-logs-mcp.vmks.svc:8080`, endpoint
+`/mcp`.
+
 ### 3. Radar
 
 `skyhook/radar 1.15.0`, MCP включён. VictoriaMetrics подключается через
 `traffic.prometheusUrl` (связки 2, 4, 5, 6). Radar не читает VictoriaLogs — логи
 приложений он берёт из Kubernetes.
+
+У Radar есть read-only MCP endpoint `/mcp-readonly` (25 инструментов вместо 32:
+убраны `apply_resource`, `patch_resource`, `manage_*`). Слабая модель ходит только
+в него, чтобы не менять кластер.
 
 ```bash
 helm upgrade --install radar oci://ghcr.io/skyhook-io/charts/radar \
@@ -89,10 +127,21 @@ helm upgrade --install radar oci://ghcr.io/skyhook-io/charts/radar \
   --set 'traffic.prometheusUrl=http://vmsingle-vmks-victoria-metrics-k8s-stack.vmks.svc:8428'
 ```
 
+`traffic.prometheusUrl` задаётся для связок 2, 4, 5, 6; для связок 1 и 3 он пуст.
+
 ### 4. HolmesGPT
 
 `robusta/holmes 0.42.0`. MCP текущего прогона, модель из `terraform.tfvars`. Ключ и
 base URL монтируются в под через Secret.
+
+По спеке слабая модель не ходит в API Kubernetes, логи и метрики подов напрямую —
+кластер она видит только через MCP. Поэтому в `values/holmes-values.yaml`:
+
+- отключены прямые toolsets `kubernetes/core`, `kubernetes/logs`,
+  `kubernetes/live-metrics`, `kubernetes/kube-prometheus-stack`,
+  `kubernetes/krew-extras`, `kubernetes/kube-lineage-extras`, `prometheus/metrics`,
+  `bash`, `kubectl-run`, `helm/core`;
+- включён Radar MCP (`mcp_servers.radar`) для всех прогонов (связки 1-6).
 
 ```bash
 helm repo add robusta https://robusta-charts.storage.googleapis.com
@@ -103,11 +152,17 @@ kubectl apply -f k8s/holmes-llm-credentials.yaml
 
 helm upgrade --install holmes robusta/holmes \
   --namespace holmes --version 0.42.0 --wait \
+  -f values/holmes-values.yaml \
   --set 'extraEnvVarsSecrets[0]=holmes-llm-credentials' \
   --set 'modelList.weak.model=openai/qwen/qwen3.6-27b' \
   --set 'modelList.weak.api_key=envRef:OPENAI_API_KEY' \
   --set 'modelList.weak.api_base=envRef:OPENAI_API_BASE'
 ```
+
+Проверка, что кластер виден только через MCP: в логах пода Holmes остаются
+включёнными `radar`, `internet`, `skills`, `connectivity_check` и внутренний
+`core_investigation`; `kubernetes/*`, `prometheus/metrics`, `bash`, `helm/core`,
+`kubectl-run` — выключены.
 
 ### 5. Mattermost
 
@@ -221,6 +276,41 @@ kubectl get pods -A
 kubectl describe pod -n <ns> <pod>
 kubectl logs -n <ns> <pod>
 ```
+
+## Прогоны бенчмарка
+
+Каждый прогон — 16 инцидентов на одну связку MCP. Симптом — «приложение X
+недоступно» (`go-1`…`python-4`). Считаются доля верных, токены и переполнение
+контекста.
+
+Связки (спека, раздел «Прогоны»):
+
+| # | Radar | VictoriaMetrics | GitHub MCP | VictoriaLogs MCP |
+|---|-------|-----------------|------------|------------------|
+| 1 | да    | —               | —          | —                |
+| 2 | да    | да              | —          | —                |
+| 3 | да    | —               | да         | —                |
+| 4 | да    | да              | да         | —                |
+| 5 | да    | да              | —          | да               |
+| 6 | да    | да              | да         | да               |
+
+Раннер `bench/run_bundle.py` переключает стенд в нужную связку (`helm upgrade`
+Radar и Holmes), прогоняет 16 симптомов через HTTP API HolmesGPT и складывает
+ответы и токены в `/tmp/holmesgpt-bench/<связка>/`:
+
+```bash
+python3 bench/run_bundle.py 1     # связка 1, результаты в /tmp/holmesgpt-bench/bundle-1
+python3 bench/run_bundle.py 6     # связка 6
+```
+
+Ответ и токены каждого инцидента — в `<app>.json`; сводка — в `summary.json`
+(`total_tokens`, `prompt_tokens`, `completion_tokens`, `errors`). Источник цифр —
+ответ `/api/chat`: `analysis` (ответ слабой модели) и `metadata.usage` (токены).
+Вердикт «верно/неверно» раннер не ставит — это дело судьи.
+
+Связки 3, 4, 6 требуют `github_token` в `terraform.tfvars` и секрет
+`github-mcp-token` в namespace `holmes`. Связки 5, 6 требуют установленный
+VictoriaLogs MCP.
 
 ## Демо Mattermost
 

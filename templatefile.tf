@@ -14,3 +14,13 @@ resource "local_file" "mattermost_bot_token" {
   filename        = "${path.module}/k8s/mattermost-bot-token.yaml"
   file_permission = "0600"
 }
+
+resource "local_file" "github_mcp_token" {
+  count = var.github_token == "" ? 0 : 1
+
+  content = templatefile("${path.module}/k8s/github-mcp-token.yaml.tpl", {
+    github_token = var.github_token
+  })
+  filename        = "${path.module}/k8s/github-mcp-token.yaml"
+  file_permission = "0600"
+}

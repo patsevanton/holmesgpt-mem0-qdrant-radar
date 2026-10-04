@@ -19,3 +19,10 @@ variable "mattermost_bot_token" {
   description = "Bot token для демо в Mattermost"
   sensitive   = true
 }
+
+variable "github_token" {
+  type        = string
+  description = "Read-only GitHub PAT для GitHub MCP (связки 3, 4, 6). Пусто — GitHub MCP не подключается."
+  sensitive   = true
+  default     = ""
+}

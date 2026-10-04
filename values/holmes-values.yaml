@@ -1,0 +1,33 @@
+# Значения HolmesGPT для бенчмарка.
+#
+# Прямые toolsets кластера отключены: по спеке слабая модель не ходит в API
+# Kubernetes, логи и метрики подов напрямую. Кластер она видит только через MCP.
+# Radar MCP включён для всех прогонов (связки 1-6).
+toolsets:
+  kubernetes/core:
+    enabled: false
+  kubernetes/logs:
+    enabled: false
+  kubernetes/live-metrics:
+    enabled: false
+  kubernetes/kube-prometheus-stack:
+    enabled: false
+  kubernetes/krew-extras:
+    enabled: false
+  kubernetes/kube-lineage-extras:
+    enabled: false
+  prometheus/metrics:
+    enabled: false
+  bash:
+    enabled: false
+  kubectl-run:
+    enabled: false
+  helm/core:
+    enabled: false
+
+mcp_servers:
+  radar:
+    description: "Radar MCP — диагностика Kubernetes через Radar"
+    config:
+      url: "http://radar.radar.svc.cluster.local:9280/mcp-readonly"
+      mode: "streamable-http"
