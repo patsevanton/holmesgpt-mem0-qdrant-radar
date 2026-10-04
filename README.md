@@ -25,6 +25,11 @@ mattermost_bot_token   = "..."
 `llm_api_key`, `llm_base_url` и `mattermost_bot_token` в файлы
 `k8s/holmes-llm-credentials.yaml` и `k8s/mattermost-bot-token.yaml` (в `.gitignore`, в
 git не попадают) и применяются в кластер через `kubectl apply -f`.
+`holmes-llm-credentials` применяется перед установкой HolmesGPT (шаг 4),
+`mattermost-bot-token` — перед установкой Mattermost (шаг 5).
+
+Пароль PostgreSQL для Mattermost в репозитории не хранится: `k8s/mattermost-apply.sh`
+читает его из кластерного секрета CloudNativePG (`mm-pg-app`) в момент запуска.
 
 ## Инфраструктура
 
@@ -106,41 +111,81 @@ helm upgrade --install holmes robusta/holmes \
 
 ### 5. Mattermost
 
-`mattermost-team-edition 6.6.108` — только демо, канал `#holmes-demo`, бот в треде.
-Внешний доступ — через Traefik. В цифры бенчмарка не входит. Вход бота — bot token из
-`terraform.tfvars`, не из репозитория.
+Mattermost Team Edition ставится через **Mattermost Operator**, БД — внешний
+PostgreSQL (CloudNativePG). Сначала PostgreSQL, затем Mattermost. Версии:
+`mattermost-operator 1.0.5` (operator `1.25.4`), образ
+`mattermost/mattermost-team-edition:11.11.1`.
+
+Namespace и bot token (token применяется до установки Mattermost):
 
 ```bash
-helm repo add mattermost https://helm.mattermost.com
-helm repo update
+kubectl create namespace mattermost
+kubectl apply -f k8s/mattermost-bot-token.yaml
+```
 
+Внешний доступ — Traefik:
+
+```bash
 LB_IP="$(terraform output -raw ingress_public_ip)"
 
 helm upgrade --install traefik oci://ghcr.io/traefik/helm/traefik \
   --namespace traefik --create-namespace --version 41.6.1 --wait \
   --set "service.spec.loadBalancerIP=${LB_IP}"
-
-helm upgrade --install mattermost mattermost/mattermost-team-edition \
-  --namespace mattermost --create-namespace --version 6.6.108 --wait \
-  --set 'ingress.enabled=true' \
-  --set 'ingress.className=traefik' \
-  --set "ingress.hosts[0]=mattermost.${LB_IP}.sslip.io"
 ```
 
-Mattermost доступен по адресу `terraform output -raw mattermost_url`
-(`http://mattermost.<IP>.sslip.io`). Bot token не хранится в манифестах: секрет
-`mattermost-bot-token` создаётся Terraform в `k8s/mattermost-bot-token.yaml`
-(в `.gitignore`, в git не попадает) и применяется:
+PostgreSQL — CloudNativePG в namespace `mattermost` (ставится первым):
 
 ```bash
-kubectl apply -f k8s/mattermost-bot-token.yaml
+helm repo add cnpg https://cloudnative-pg.github.io/charts
+helm repo update
+
+helm upgrade --install cnpg cnpg/cloudnative-pg \
+  --namespace cnpg --create-namespace --version 0.29.1 --wait
+
+kubectl apply -f k8s/mattermost-postgres.yaml
+kubectl wait --for=condition=Ready cluster/mm-pg -n mattermost --timeout=600s
 ```
+
+Mattermost Team Edition — оператор:
+
+```bash
+helm repo add mattermost https://helm.mattermost.com
+helm repo update
+
+helm upgrade --install mattermost-operator mattermost/mattermost-operator \
+  --namespace mattermost --version 1.0.5 --wait
+```
+
+Custom Resource `Mattermost` (host и пароль БД подставляются из кластера):
+
+```bash
+bash k8s/mattermost-apply.sh
+kubectl wait --for=jsonpath='{.status.state}'=stable mattermost/mattermost -n mattermost --timeout=600s
+```
+
+`k8s/mattermost-apply.sh` создаёт Secret `mattermost-db` из секрета CloudNativePG
+`mm-pg-app` и применяет CR `k8s/mattermost.yaml.tpl`. В CR:
+`fileStore.local` с `accessModes: ReadWriteOnce` (диски `yc-network-hdd` только
+RWO), `podTemplate.securityContext.fsGroup: 2000` (образ работает под uid/gid
+`2000`, иначе `permission denied` на PVC), `ingress.ingressClass: traefik`.
+
+Mattermost доступен по адресу `terraform output -raw mattermost_url`
+(`http://mattermost.<IP>.sslip.io`); проверка — `/api/v4/system/ping` возвращает
+`{"status":"OK"}`. Секрет `mattermost-bot-token` создаётся Terraform в
+`k8s/mattermost-bot-token.yaml` (в `.gitignore`, в git не попадает).
 
 ### 6. 16 приложений
 
 ```bash
 helm upgrade --install bench-apps ./chart --namespace apps --create-namespace
 ```
+
+Часть приложений падает — это специально: с багами пишутся и код, и values
+(спека, раздел «Стенд»). `helm` при этом завершается с ошибкой, релиз `bench-apps`
+получает статус `failed`, но 13 из 16 Deployment создаются. Причина падения
+установки — `requests` больше `limits` у `nuxt-4` (memory 64Mi > 32Mi), `java-4`
+(memory 256Mi > 96Mi), `java-3` (cpu 50m > 20m): API-сервер не принимает такие
+Deployment. Это часть тестового стенда, отдельно не чинится.
 
 ## Проверка после каждого шага
 

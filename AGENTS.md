@@ -67,8 +67,11 @@ kubectl get nodes
 4. **HolmesGPT** (`robusta/holmes 0.42.0`). MCP текущего прогона, модель из
    `terraform.tfvars`. Секрет с ключом монтируется в под.
 
-5. **Mattermost** (`mattermost-team-edition 6.6.108`) — только демо, канал
-   `#holmes-demo`, бот в треде. В цифры бенчмарка не входит.
+5. **Mattermost** — демо, канал `#holmes-demo`, бот в треде. В цифры бенчмарка не
+   входит. Ставится **Mattermost Operator** (`mattermost-operator 1.0.5`, образ
+   `mattermost/mattermost-team-edition:11.11.1`). Порядок: bot token → Traefik →
+   CloudNativePG (PostgreSQL, ставится первым) → оператор → CR `Mattermost`
+   (`bash k8s/mattermost-apply.sh`).
 
 6. **16 приложений** из `chart/`:
 

@@ -71,11 +71,14 @@ Radar не читает VictoriaLogs. Логи приложений Radar бер
 
 ## Зафиксированные версии
 
-- Holmes chart `0.42.0`. Mattermost Team Edition chart `6.6.108`.
+- Holmes chart `0.42.0`. Mattermost: оператор `mattermost-operator 1.0.5` (operator
+  `1.25.4`), образ `mattermost/mattermost-team-edition:11.11.1`, БД — PostgreSQL
+  (CloudNativePG).
 - VictoriaMetrics, VictoriaLogs и Radar: перед установкой дешёвая модель берёт latest stable chart и записывает факт в спеку. Не угадывает.
 - Установлено (latest stable на 2026-10-03):
   - victoria-metrics-k8s-stack `0.95.0` (app `v1.153.0`), namespace `vmks`
   - victoria-logs-single `0.13.10` (app `v1.53.0`), namespace `vmks`
   - radar `1.15.0` (`skyhook/radar`), MCP включён
   - holmes `0.42.0` (`robusta/holmes`)
-  - mattermost-team-edition `6.6.108`
+  - mattermost-operator `1.0.5` (operator `1.25.4`), образ
+    `mattermost/mattermost-team-edition:11.11.1`, БД — CloudNativePG (PostgreSQL)
