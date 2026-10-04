@@ -23,3 +23,8 @@ spec:
   podTemplate:
     securityContext:
       fsGroup: 2000
+  mattermostEnv:
+    - name: MM_SERVICESETTINGS_ENABLEBOTACCOUNTCREATION
+      value: "true"  # Разрешает юзерам создание bot-аккаунтов
+    - name: MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS
+      value: "true"  # Разрешает юзерам выпуск personal access tokens

@@ -168,11 +168,38 @@ kubectl wait --for=jsonpath='{.status.state}'=stable mattermost/mattermost -n ma
 `fileStore.local` с `accessModes: ReadWriteOnce` (диски `yc-network-hdd` только
 RWO), `podTemplate.securityContext.fsGroup: 2000` (образ работает под uid/gid
 `2000`, иначе `permission denied` на PVC), `ingress.ingressClass: traefik`.
+`mattermostEnv` разрешает создание ботов и access-токенов
+(`MM_SERVICESETTINGS_ENABLEBOTACCOUNTCREATION`, `MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS`).
 
 Mattermost доступен по адресу `terraform output -raw mattermost_url`
 (`http://mattermost.<IP>.sslip.io`); проверка — `/api/v4/system/ping` возвращает
-`{"status":"OK"}`. Секрет `mattermost-bot-token` создаётся Terraform в
-`k8s/mattermost-bot-token.yaml` (в `.gitignore`, в git не попадает).
+`{"status":"OK"}`.
+
+### 5.1. Демо-сущности (админ, канал, бот)
+
+Через `mattermostEnv`/CR задаются только настройки сервера. Пользователь, команда,
+канал и бот — это записи в БД, в `config.json` их нет; создаются через API или
+`mmctl`. `mmctl` есть в образе и работает в local mode (`--local`, unix-сокет, без
+пароля). Команда `bot create` в local mode запрещена, поэтому бот создаётся как
+`user create` → `user convert --bot` → `token generate`.
+
+```bash
+ADMIN_PASSWORD='...' BOT_PASSWORD='...' bash k8s/mattermost-demo-setup.sh
+```
+
+`k8s/mattermost-demo-setup.sh` идемпотентно создаёт системного админа
+(`admin@example.com`), команду `demo`, канал `#holmes-demo`, бота `holmes-bot`,
+добавляет бота в команду и канал и кладёт выпущенный токен в Secret
+`mattermost-bot-token`. Пароли передаются через переменные окружения, в репозитории
+не хранятся.
+
+Первый пользователь в свежем Mattermost тоже становится админом, но скрипт создаёт
+его заранее через `mmctl --local` — вручную регистрироваться в UI не нужно.
+
+Секрет `mattermost-bot-token` создаётся Terraform в `k8s/mattermost-bot-token.yaml`
+(в `.gitignore`, в git не попадает) и применяется на шаге 5. Скрипт перезаписывает
+его актуальным токеном из этого Mattermost: токен из `terraform.tfvars` — для
+внешнего бота, в свежем инстансе его нет.
 
 ### 6. 16 приложений
 
