@@ -1,0 +1,14 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: mm-pg
+  namespace: mattermost
+spec:
+  instances: 1
+  storage:
+    size: 8Gi
+    storageClass: yc-network-hdd
+  bootstrap:
+    initdb:
+      database: mattermost
+      owner: mattermost
