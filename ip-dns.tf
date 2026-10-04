@@ -7,6 +7,19 @@ resource "yandex_vpc_address" "traefik" {
   }
 }
 
+# Пауза перед удалением публичного IP-адреса при terraform destroy.
+# LoadBalancer, создаваемый cloud-controller-manager через Service Traefik,
+# освобождает адрес не мгновенно после удаления кластера/helm-релиза — без паузы
+# yandex_vpc_address.traefik падает с ошибкой "Address in use".
+# Порядок destroy: helm_release -> cluster -> time_sleep (пауза) -> yandex_vpc_address.traefik.
+resource "time_sleep" "wait_lb_release" {
+  destroy_duration = "60s"
+
+  depends_on = [
+    yandex_vpc_address.traefik,
+  ]
+}
+
 # Публичный DNS не требуется: используются sslip.io-имена вида
 # <сервис>.<LB_IP>.sslip.io, которые резолвятся в IP балансировщика Traefik.
 output "ingress_public_ip" {

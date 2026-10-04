@@ -46,7 +46,10 @@ resource "yandex_kubernetes_cluster" "bench" {
   node_service_account_id = yandex_iam_service_account.sa_k8s_editor.id
   release_channel         = "STABLE"
 
-  depends_on = [time_sleep.wait_sa]
+  depends_on = [
+    time_sleep.wait_sa,
+    time_sleep.wait_lb_release,
+  ]
 }
 
 resource "yandex_kubernetes_node_group" "k8s_node_group" {
