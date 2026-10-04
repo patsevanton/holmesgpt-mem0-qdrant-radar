@@ -1,7 +1,7 @@
 ---
 description: Прогоны бенчмарка слабой моделью. Use when installing the stand, running one incident investigation, or calling HolmesGPT. Triggers: прогон, бенчмарк, стенд, helm, terraform, расследование.
 mode: subagent
-model: polza/qwen/qwen3.6-27b
+model: polza/deepseek/deepseek-v4.1-flash
 permission:
   edit: deny
 ---

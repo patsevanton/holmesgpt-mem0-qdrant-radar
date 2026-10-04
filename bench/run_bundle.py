@@ -79,7 +79,7 @@ def configure_holmes(bundle):
         "--namespace", NS, "--version", "0.42.0", "--wait", "--timeout", "8m",
         "-f", HOLMES_VALUES,
         "--set", "extraEnvVarsSecrets[0]=holmes-llm-credentials",
-        "--set", "modelList.weak.model=openai/qwen/qwen3.6-27b",
+        "--set", "modelList.weak.model=openai/deepseek/deepseek-v4.1-flash",
         "--set", "modelList.weak.api_key=envRef:OPENAI_API_KEY",
         "--set", "modelList.weak.api_base=envRef:OPENAI_API_BASE",
     ]
