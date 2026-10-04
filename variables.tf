@@ -26,3 +26,17 @@ variable "github_token" {
   sensitive   = true
   default     = ""
 }
+
+variable "admin_password" {
+  type        = string
+  description = "Пароль системного админа Mattermost для демо (k8s/mattermost-demo-setup.sh)"
+  sensitive   = true
+  default     = ""
+}
+
+variable "bot_password" {
+  type        = string
+  description = "Пароль бота Mattermost для демо (k8s/mattermost-demo-setup.sh)"
+  sensitive   = true
+  default     = ""
+}
