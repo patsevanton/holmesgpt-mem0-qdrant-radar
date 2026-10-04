@@ -38,6 +38,13 @@ RADAR_VM_URL = "http://vmsingle-vmks-victoria-metrics-k8s-stack.vmks.svc:8428"
 VLOGS_MCP_URL = "http://vlogs-mcp-victoria-logs-mcp.vmks.svc:8080/mcp"
 HOLMES_VALUES = "values/holmes-values.yaml"
 
+# Ожидание ответа слабой модели на один инцидент. Внутренний urllib timeout
+# равен этому значению; внешний subprocess timeout чуть больше — запас на
+# передачу и завершение процесса. При срабатывании инцидент помечается ошибкой,
+# собираются диагностика пода Holmes, и прогон продолжается со следующего.
+INCIDENT_TIMEOUT = 300
+SUBPROCESS_TIMEOUT_MARGIN = 15
+
 # Какие MCP включены в каждой связке.
 BUNDLES = {
     1: {"vm": False, "github": False, "vlogs": False},
@@ -117,23 +124,54 @@ def wait_ready(pod, timeout=300):
     raise RuntimeError(f"под {pod} не стал Ready за {timeout}s")
 
 
-def api_chat(ask, timeout=900):
+def api_chat(ask, timeout=INCIDENT_TIMEOUT):
     pod = holmes_pod()
     payload = json.dumps({"ask": ask, "model": "weak", "stream": False}).encode()
-    proc = subprocess.run([
-        "kubectl", "exec", "-i", "-n", NS, pod, "--",
-        "python3", "-c",
-        (
-            "import sys,urllib.request;"
-            "req=urllib.request.Request('http://localhost:5050/api/chat',"
-            "data=sys.stdin.buffer.read(),"
-            "headers={'Content-Type':'application/json'});"
-            "sys.stdout.buffer.write(urllib.request.urlopen(req,timeout=%d).read())"
-        ) % timeout,
-    ], input=payload, capture_output=True)
+    # Код 42 и маркер в stderr — внутренний urllib timeout (модель не ответила
+    # за timeout). Внешний subprocess timeout чуть больше и ловит случай, когда
+    # подвис сам kubectl exec.
+    remote = (
+        "import sys,urllib.request;"
+        "req=urllib.request.Request('http://localhost:5050/api/chat',"
+        "data=sys.stdin.buffer.read(),"
+        "headers={'Content-Type':'application/json'});"
+        "\ntry:\n"
+        " sys.stdout.buffer.write(urllib.request.urlopen(req,timeout=%d).read())\n"
+        "except TimeoutError:\n"
+        " sys.stderr.write('__HOLMES_TIMEOUT__');sys.exit(42)\n"
+    ) % timeout
+    try:
+        proc = subprocess.run([
+            "kubectl", "exec", "-i", "-n", NS, pod, "--", "python3", "-c", remote,
+        ], input=payload, capture_output=True, timeout=timeout + SUBPROCESS_TIMEOUT_MARGIN)
+    except subprocess.TimeoutExpired:
+        return {"error": f"timeout after {timeout}s"}
+    if proc.returncode == 42 or b"__HOLMES_TIMEOUT__" in proc.stderr:
+        return {"error": f"timeout after {timeout}s"}
     if proc.returncode != 0:
         return {"error": proc.stderr.decode()[:2000]}
     return json.loads(proc.stdout.decode())
+
+
+def collect_diagnostics(pod, outdir, app):
+    """Снимок пода Holmes на момент timeout: logs, describe, top."""
+    diagdir = os.path.join(outdir, "diagnostics")
+    os.makedirs(diagdir, exist_ok=True)
+    logs = subprocess.run(
+        ["kubectl", "logs", "-n", NS, pod, "--tail=400"],
+        capture_output=True, text=True).stdout
+    with open(os.path.join(diagdir, f"{app}.logs.txt"), "w") as fh:
+        fh.write(logs)
+    describe = subprocess.run(
+        ["kubectl", "describe", "pod", "-n", NS, pod],
+        capture_output=True, text=True).stdout
+    with open(os.path.join(diagdir, f"{app}.describe.txt"), "w") as fh:
+        fh.write(describe)
+    top = subprocess.run(
+        ["kubectl", "top", "pod", "-n", NS, pod],
+        capture_output=True, text=True).stdout
+    with open(os.path.join(diagdir, f"{app}.top.txt"), "w") as fh:
+        fh.write(top)
 
 
 def run_bundle(bundle, outdir, apps=None):
@@ -150,13 +188,20 @@ def run_bundle(bundle, outdir, apps=None):
     for app in apps:
         symptom = f"приложение {app} недоступно"
         print(f"--- {bundle}: {symptom}", flush=True)
+        started = time.monotonic()
         resp = api_chat(symptom)
-        usage = (resp.get("metadata") or {}).get("usage", {}) if "error" not in resp else {}
+        elapsed = time.monotonic() - started
+        error = resp.get("error")
+        if error and error.startswith("timeout"):
+            print(f"!!! {bundle}: {app}: {error} — собираю диагностику пода {pod}", flush=True)
+            collect_diagnostics(pod, outdir, app)
+        usage = (resp.get("metadata") or {}).get("usage", {}) if not error else {}
         entry = {
             "app": app,
             "symptom": symptom,
+            "elapsed_seconds": round(elapsed, 1),
             "analysis": resp.get("analysis"),
-            "error": resp.get("error"),
+            "error": error,
             "usage": usage,
             "tool_calls": [t.get("tool_name") for t in (resp.get("tool_calls") or [])],
         }
@@ -169,6 +214,7 @@ def run_bundle(bundle, outdir, apps=None):
         "config": cfg,
         "incidents": len(results),
         "errors": sum(1 for r in results if r["error"]),
+        "timeouts": sum(1 for r in results if (r["error"] or "").startswith("timeout")),
         "total_tokens": sum((r["usage"] or {}).get("total_tokens", 0) for r in results),
         "prompt_tokens": sum((r["usage"] or {}).get("prompt_tokens", 0) for r in results),
         "completion_tokens": sum((r["usage"] or {}).get("completion_tokens", 0) for r in results),
