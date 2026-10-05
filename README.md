@@ -92,8 +92,13 @@ helm upgrade --install vlogs oci://ghcr.io/victoriametrics/helm-charts/victoria-
 
 helm upgrade --install vlogs-collector oci://ghcr.io/victoriametrics/helm-charts/victoria-logs-collector \
   --namespace vmks --version 0.3.8 --wait \
-  --set 'remoteWrite[0].url=http://vlogs-victoria-logs-single-server.vmks.svc:9428'
+  --set 'remoteWrite[0].url=http://vlogs-victoria-logs-single-server.vmks.svc:9428' \
+  --set 'collector.excludeFilter=kubernetes.pod_namespace:holmes'
 ```
+
+`excludeFilter` исключает логи namespace `holmes` из VictoriaLogs: ответы слабой
+модели печатаются в stdout пода Holmes, и без фильтра исследователь (связки 5, 6)
+читал бы их через VictoriaLogs MCP. Логи приложений (`apps`) поступают как раньше.
 
 VictoriaLogs MCP (`victoria-logs-mcp 0.2.0`, app `v1.9.0`) — отдельный источник
 логов для связок 5 и 6:
@@ -120,11 +125,21 @@ MCP-сервер поднимается на `vlogs-mcp-victoria-logs-mcp.vmks.s
 убраны `apply_resource`, `patch_resource`, `manage_*`). Слабая модель ходит только
 в него, чтобы не менять кластер.
 
+Radar MCP включается с `rbac.podLogs=false`: cluster-wide `pods/log` позволял бы
+слабой модели прочитать логи собственного пода Holmes (там stdout с финальным
+ответом). Чтобы не потерять `get_pod_logs` для диагностируемых приложений, право
+на `pods/log` выдаётся только для namespace `apps`
+(`k8s/radar-podlogs-apps.yaml`). Раннер `bench/run_bundle.py` делает и то, и другое
+при переключении связки.
+
 ```bash
 helm upgrade --install radar oci://ghcr.io/skyhook-io/charts/radar \
   --namespace radar --create-namespace --version 1.15.0 --wait \
   --set 'mcp.enabled=true' \
+  --set 'rbac.podLogs=false' \
   --set 'traffic.prometheusUrl=http://vmsingle-vmks-victoria-metrics-k8s-stack.vmks.svc:8428'
+
+kubectl apply -f k8s/radar-podlogs-apps.yaml
 ```
 
 `traffic.prometheusUrl` задаётся для связок 2, 4, 5, 6; для связок 1 и 3 он пуст.
@@ -307,6 +322,13 @@ python3 bench/run_bundle.py 6     # связка 6
 (`total_tokens`, `prompt_tokens`, `completion_tokens`, `errors`). Источник цифр —
 ответ `/api/chat`: `analysis` (ответ слабой модели) и `metadata.usage` (токены).
 Вердикт «верно/неверно» раннер не ставит — это дело судьи.
+
+Результаты лежат на хосте раннера, вне репозитория и вне кластера: поды стенда не
+видят этот каталог, у исследователя-слабой модели доступа к нему нет. Читают их
+человек или судья вручную после серии прогонов. Чтобы ответ слабой модели не тек
+через MCP обратно к исследователю, дополнительно закрыты два канала: логи
+namespace `holmes` в VictoriaLogs (шаг 2) и cluster-wide `pods/log` у Radar
+(шаг 3).
 
 Связки 3, 4, 6 требуют `github_token` в `terraform.tfvars` и секрет
 `github-mcp-token` в namespace `holmes`. Связки 5, 6 требуют установленный

@@ -25,6 +25,8 @@ import time
 import urllib.error
 import urllib.request
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 NS = "holmes"
 RADAR_NS = "radar"
 APPS = [
@@ -63,12 +65,24 @@ def run(cmd, **kw):
 
 def configure_radar(vm):
     url = RADAR_VM_URL if vm else ""
+    # rbac.podLogs=false убирает cluster-wide pods/log: слабая модель через Radar
+    # MCP не должна читать логи собственного пода Holmes (namespace holmes),
+    # где в stdout попадает финальный ответ. Логи приложений Radar по-прежнему
+    # читает в namespace apps — через Role/RoleBinding k8s/radar-podlogs-apps.yaml,
+    # применяемый ниже (kubectl apply -f).
     run([
         "helm", "upgrade", "--install", "radar",
         "oci://ghcr.io/skyhook-io/charts/radar",
         "--namespace", RADAR_NS, "--version", "1.15.0", "--wait", "--timeout", "5m",
         "--set", "mcp.enabled=true",
+        "--set", "rbac.podLogs=false",
         "--set", f"traffic.prometheusUrl={url}",
+    ])
+    # Role/RoleBinding pods/log только для namespace apps: без них Radar потеряет
+    # get_pod_logs для диагностируемых приложений после rbac.podLogs=false.
+    run([
+        "kubectl", "apply", "-f",
+        os.path.join(REPO_ROOT, "k8s", "radar-podlogs-apps.yaml"),
     ])
 
 
