@@ -46,8 +46,6 @@ terraform.rc
 # Сгенерировано Terraform (содержит секреты)
 k8s/holmes-llm-credentials.yaml
 k8s/mattermost-bot-token.yaml
-k8s/github-mcp-token.yaml
 
 # Python
 __pycache__/
-bench/__pycache__/run_bundle.cpython-314.pyc

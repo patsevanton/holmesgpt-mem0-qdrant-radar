@@ -20,13 +20,6 @@ variable "mattermost_bot_token" {
   sensitive   = true
 }
 
-variable "github_token" {
-  type        = string
-  description = "Read-only GitHub PAT для GitHub MCP (связки 3, 4, 6). Пусто — GitHub MCP не подключается."
-  sensitive   = true
-  default     = ""
-}
-
 variable "admin_password" {
   type        = string
   description = "Пароль системного админа Mattermost для демо (k8s/mattermost-demo-setup.sh)"
